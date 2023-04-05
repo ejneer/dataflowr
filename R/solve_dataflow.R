@@ -13,8 +13,20 @@
 solve_dataflow <- function(fun_name, envir) {
   env_plan <- new_environment(parent = envir)
 
+  is_function <- function(name) {
+    name %in% lsf.str(envir)
+  }
+
+  formals_from_plan <- function(formals_names) {
+    if (!is.null(formals_names)) {
+      env_get_list(env_plan, formals_names)
+    } else {
+      list()
+    }
+  }
+
   recur <- function(sym_name) {
-    if (is_function(sym_name, envir)) {
+    if (is_function(sym_name)) {
       formals_names <- fn_fmls_names(as_function(sym_name, envir))
 
       # arguments to this function that aren't in the planning environment
@@ -23,15 +35,10 @@ solve_dataflow <- function(fun_name, envir) {
       # make sure all arguments are resolved to a call or symbol
       walk(unresolved, recur)
 
-      if (is.null(formals_names)) {
-        # bare function call (i.e. no arguments)
-        new_call <- call2(sym_name)
-      } else {
-        # call with arguments from the planning environment
-        new_call <- call2(sym_name, !!!env_get_list(env_plan, formals_names))
-      }
-
-      env_bind(env_plan, !!sym_name := new_call)
+      env_bind(
+        env_plan,
+        !!sym_name := call2(sym_name, !!!formals_from_plan(formals_names))
+      )
     } else {
       # its just a symbol
       env_bind(env_plan, !!sym_name := sym(sym_name))
@@ -40,13 +47,4 @@ solve_dataflow <- function(fun_name, envir) {
   recur(fun_name)
 
   env_plan
-}
-#' Is `name` a function in `envir`?
-#'
-#' @param name string name of an object
-#' @param envir environment in which to look for `name`
-#' @return boolean
-#' @noRd
-is_function <- function(name, envir) {
-  name %in% lsf.str(envir)
 }
