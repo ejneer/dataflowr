@@ -1,0 +1,93 @@
+---
+output: github_document
+---
+
+<!-- README.md is generated from README.Rmd. Please edit that file -->
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>",
+  fig.path = "man/figures/README-",
+  out.width = "100%"
+)
+```
+
+# dataflowR
+
+dataflowR is a small library inspired by python's Hamilton library that intends to ease the creation and running of dataflows, pipelines, DAGs, whatever you want to call them. 
+They're all a series of ordered transformations on data.
+
+## Installation
+
+``` r
+# install.packages("devtools")
+devtools::install_github("ejneer/dataflowr")
+```
+
+## Simple Example
+
+Define functions that form a data flow to calculate the power to weight ratio of some cars in `mtcars`.
+
+```{r}
+library(dataflowr)
+
+mtcars_data <- function(cyls) mtcars[mtcars$cyl %in% cyls, ]
+
+horsepower <- function(mtcars_data) mtcars_data$hp
+
+weight <- function(mtcars_data) mtcars_data$wt
+
+power_to_weight <- function(horsepower, weight) horsepower / weight
+
+execution_plan <- solve_dataflow("power_to_weight", rlang::current_env())
+``` 
+
+Looking at the AST of the new `power_to_weight` call shows what `solve_dataflow` has done:
+
+```{r}
+lobstr::ast(!!execution_plan$power_to_weight)
+```
+
+The arguments to `power_to_weight` were replaced with function calls (represented by the blocks █ in the AST) of the same name since those were function names in the given environment.
+Similarly, `horsepower` and `weight` had their argument replaced with a function call.
+At the beginning of the dataflow is `mtcars_data` whose only argument is *not* named the same as a function, so it is left alone as a symbol.
+
+At this point none of these functions have actually been executed, only the order in which they would need to be executed has been resolved in the returned environment (hence the name `execution_plan`).
+An identically named version of every function and non-function argument involved in the dataflow has been created in `execution_plan`, as a call or symbol object respectively.
+
+```{r}
+ls(execution_plan)
+
+execution_plan$power_to_weight
+
+typeof(execution_plan$power_to_weight)
+
+execution_plan$horsepower
+
+execution_plan$weight
+
+execution_plan$mtcars_data
+
+execution_plan$cyls
+
+typeof(execution_plan$cyls)
+```
+
+Note that these are not `function`s, but call (or "language") objects (except for `cyls`, a symbol).
+The definition of these functions does not exist in the `execution_plan` environment so it is not of much use on its own.
+The second argument to `solve_dataflow`, `envir`, becomes the parent of `execution_plan`.
+To actually execute a call object in the `execution_plan`, we can `eval` it, and when R tries to `eval` calls for functions that don't exist in the current environment, it will search the parent environment where it will find function definitions in this case.
+
+We would also still need to provide a definition for data that isn't a function call, like `cyls` here.
+This is easy enough, as variable bindings may be passed in a list to `eval`. 
+
+```{r}
+eval(execution_plan$power_to_weight, list(cyls = 4))
+```
+
+To check ourselves:
+
+```{r}
+mtcars[mtcars$cyl == 4, ]$hp / mtcars[mtcars$cyl == 4, ]$wt
+```
