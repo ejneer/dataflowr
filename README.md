@@ -6,7 +6,23 @@
 dataflowR is a small library inspired by python’s Hamilton library that
 intends to ease the creation and running of dataflows, pipelines, DAGs,
 whatever you want to call them. They’re all a series of ordered
-transformations on data.
+transformations on data. Transformation steps (i.e. a DAG) are encoded
+using function and argument names. In a given environment, if a function
+takes an argument that is named the same as another function, it is
+assumed that the results of that other function call should be passed in
+as that argument to the original function.
+
+``` r
+data_provider <- function() { # do something to return data... }
+
+transformer <- function(data_provider) { do_something_to(data_provider) }
+```
+
+Above, the results of `data_provider` would be passed to `transformer`
+since it takes an argument named `data_provider`. This allows one to
+write normal, isolated, and testable functions that also define a DAG
+without any extra code. Function dependencies are made clear from the
+function signature itself easing understanding of a dataflow.
 
 ## Installation
 
