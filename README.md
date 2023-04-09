@@ -133,3 +133,45 @@ mtcars[mtcars$cyl == 4, ]$hp / mtcars[mtcars$cyl == 4, ]$wt
 #>  [1] 40.08621 19.43574 30.15873 30.00000 32.19814 35.42234 39.35091 34.10853
 #>  [9] 42.52336 74.68605 39.20863
 ```
+
+### Repeated Function Calls
+
+You may have noticed that in the dataflow for `power_to_weight`,
+`mtcars_data` executes more than once. This doesn’t matter much if
+functions return results quickly, as they did in the simple example.
+However, if a function is doing something time-consuming (e.g. a heavy
+calculation or database query) this may lead to poor performance.
+
+``` r
+# with fast return
+bench::bench_time(eval(execution_plan$power_to_weight, list(cyls = 4)))
+#> process    real 
+#>   107µs   106µs
+
+# redefine mtcars_data to take a noticeable amount of time
+mtcars_data <- function(cyls) {
+  Sys.sleep(1)
+  mtcars[mtcars$cyl %in% cyls, ]
+}
+
+bench::bench_time(eval(execution_plan$power_to_weight, list(cyls = 4)))
+#> process    real 
+#>   706µs   1.97s
+```
+
+Given that the `execution_plan` only knows how to call functions and not
+their definitions, we can treat this as an orthogonal problem to the
+dataflow. For example, function results may be cached in
+`execution_plan`’s parent such that any function calls only happen once
+for a given set of arguments.
+
+``` r
+mtcars_data <- memoise::memoise(mtcars_data)
+
+bench::bench_time(eval(execution_plan$power_to_weight, list(cyls = 4)))
+#> process    real 
+#> 78.58ms   1.06s
+```
+
+Now the total dataflow takes roughly half as much time as before since
+`mtcars_data` only gets called once instead of twice.
